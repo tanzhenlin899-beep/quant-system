@@ -61,6 +61,17 @@ python main.py
 | `--no-timing` | 关闭波动率目标择时，用于消融对比 |
 | `--quick` | 跳过参数敏感性扫描，缩短运行时间 |
 
+### 1.4 Web 界面（可选）
+
+```powershell
+pip install -r requirements-web.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+uvicorn web.app:app --host 127.0.0.1 --port 8000
+```
+
+浏览器访问 `http://127.0.0.1:8000`。页面提供股票池规模、持仓只数、缓冲区、调仓周期、择时开关、目标波动共六个参数；提交后由后端重新加载数据、计算因子并执行撮合，返回本次请求的指标与净值曲线，不使用预计算结果。前端为单个 HTML 文件，图表以原生 SVG 绘制，不引用外部资源。
+
+接口：`GET /api/defaults`、`POST /api/run`、`GET /api/health`、`GET /api/docs`。
+
 ---
 
 ## 2. 目录结构
