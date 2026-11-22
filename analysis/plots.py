@@ -152,6 +152,45 @@ def plot_layered(layered: pd.DataFrame, path: str | Path = "outputs/layered.png"
     return path
 
 
+def plot_sweep(navs: dict, bench: pd.Series, split_date: str | None = None,
+               path: str | Path = "outputs/sweep_hold.png"):
+    """参数扫描对比图：不同持仓只数的净值曲线放在一起，和基准比较。
+
+    报告里「参数选择」那一节用这张图最有说服力——
+    能一眼看出参数不是靠运气挑的。
+    """
+    fig, ax = plt.subplots(figsize=(12, 6))
+    cmap = plt.get_cmap("viridis")
+    keys = sorted(navs)
+    for i, k in enumerate(keys):
+        s = navs[k] / navs[k].iloc[0]
+        ax.plot(s.index, s.values, lw=1.4, color=cmap(i / max(len(keys) - 1, 1)),
+                label=f"持仓 {k} 只")
+
+    first = navs[keys[0]]
+    b = bench.reindex(first.index).ffill()
+    b = b / b.iloc[0]
+    ax.plot(b.index, b.values, color="#2c3e50", lw=1.8, alpha=0.9, label="基准（沪深300）")
+
+    ax.axhline(1.0, color="gray", ls="--", lw=0.8)
+    if split_date:
+        ax.axvline(pd.Timestamp(split_date), color="#e67e22", ls=":", lw=1.2)
+        ax.text(pd.Timestamp(split_date), ax.get_ylim()[1], "  样本外 →",
+                color="#e67e22", va="top", fontsize=9)
+
+    ax.set_title("参数扫描：不同持仓只数的净值曲线（起点 = 1.0）")
+    ax.set_ylabel("归一化净值")
+    ax.set_xlabel("日期")
+    ax.legend(loc="upper left", ncol=2)
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return path
+
+
 def plot_sensitivity(table: pd.DataFrame, path: str | Path = "outputs/sensitivity.png"):
     """参数敏感性热力图：好的参数应该在一整片区域都好，而不是孤立的一个点。"""
     fig, ax = plt.subplots(figsize=(8, 5))
