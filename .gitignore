@@ -1,0 +1,35 @@
+# 虚拟环境：每个人自己装，不进仓库
+.venv/
+venv/
+env/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 数据缓存：几百 MB，不进仓库（跑一次会自动重新下载）
+data/cache/
+tmp/
+.tmp/
+
+# 回测输出：图和大表不进仓库，最终图表请另存到 docs/figures/
+outputs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# 编辑器 / 系统
+.vscode/*.log
+.idea/
+.DS_Store
+Thumbs.db
+
+# 敏感信息
+.env
+*.key
+*.pem

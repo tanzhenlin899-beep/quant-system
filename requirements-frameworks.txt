@@ -1,0 +1,21 @@
+# 可选的第三方回测框架（只在做多引擎交叉验证时才需要）
+#
+# 安装：
+#   pip install -r requirements-frameworks.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+#
+# 说明：
+#   这些框架不是系统运行必需。主系统用自研引擎（backtest/engine.py）跑，
+#   装了它们之后可以运行 python tools/compare_engines.py 做交叉验证。
+
+backtrader>=1.9.78.123
+
+# ---- 以下两个默认不装，需要时自行去掉注释 ----
+#
+# vnpy：实盘交易平台，体量很大（含 PySide6 GUI 和 TA-Lib），
+#       课程作业只做回测的话没必要装。
+# vnpy>=3.9
+# vnpy_ctastrategy>=1.2
+#
+# zipline-reloaded：美股导向的事件驱动回测框架，
+#                   在 Windows 上安装依赖较多，且没有 A 股数据包。
+# zipline-reloaded>=3.0

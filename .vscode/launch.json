@@ -1,0 +1,115 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "① 回测主流程（离线模拟数据）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "args": ["--mode", "offline"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "①b 回测主流程（默认数据源 = 真实 A 股）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "② 回测主流程（真实 A 股数据）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "args": ["--mode", "akshare"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "②b 真实数据（快速版，跳过参数扫描）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "args": ["--mode", "akshare", "--quick"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "②c 数据源体检（跑真实数据前先点这个）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/check_data.py",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "②d 真实数据（baostock，不限流，推荐）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "args": ["--mode", "baostock", "--quick"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "③ 消融对比（关闭择时，快速）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "args": ["--no-timing", "--quick"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "④ 交叉验证：自研引擎 vs backtrader（20 只，约 10 秒）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/compare_engines.py",
+      "args": ["20"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "⑤ 交叉验证：自研引擎 vs backtrader（40 只）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/compare_engines.py",
+      "args": ["40"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "⑥ 启动 Web 界面（FastAPI，端口 8000）",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["web.app:app", "--host", "127.0.0.1", "--port", "8000", "--log-level", "info"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "⑦ 启动 Web 界面（备用端口 8001）",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["web.app:app", "--host", "127.0.0.1", "--port", "8001", "--log-level", "info"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}

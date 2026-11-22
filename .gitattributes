@@ -1,0 +1,10 @@
+# 统一换行符，避免 Windows 上反复出现 LF/CRLF 警告
+* text=auto eol=lf
+
+# 二进制文件不要做换行符转换
+*.png binary
+*.jpg binary
+*.parquet binary
+*.xlsx binary
+*.docx binary
+*.pptx binary

@@ -1,0 +1,11 @@
+# Web 界面所需的依赖（可选，只有要在浏览器里演示时才需要）
+#
+# 安装：
+#   pip install -r requirements-web.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+#
+# 启动：
+#   uvicorn web.app:app --reload --port 8000
+#   然后打开 http://127.0.0.1:8000
+
+fastapi>=0.110
+uvicorn>=0.27

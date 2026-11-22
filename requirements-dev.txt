@@ -1,0 +1,6 @@
+# 开发与自测所需（不影响运行，只有改代码/跑测试时需要）
+#
+#   pip install -r requirements-dev.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+ruff>=0.6          # 静态检查 + 格式化
+pytest>=8.0        # 可选：用 pytest 跑测试
