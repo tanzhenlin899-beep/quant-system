@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多因子选股 · 量化交易系统</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1e2738; --line:#2a3446;
+    --text:#e6ecf5; --dim:#8a97ab; --red:#e8564a; --blue:#5b8ff9;
+    --green:#2ecc8f; --amber:#f0a742;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font-family:"Microsoft YaHei","Segoe UI",system-ui,sans-serif;font-size:14px}
+  header{padding:16px 24px;border-bottom:1px solid var(--line);
+         display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+  header h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.5px}
+  .badge{font-size:12px;padding:3px 9px;border-radius:11px;
+         background:rgba(91,143,249,.16);color:var(--blue);border:1px solid rgba(91,143,249,.35)}
+  .badge.warn{background:rgba(240,167,66,.14);color:var(--amber);border-color:rgba(240,167,66,.35)}
+  .layout{display:grid;grid-template-columns:290px 1fr;gap:18px;padding:18px 24px 40px;
+          align-items:start;max-width:1560px}
+  @media(max-width:1050px){.layout{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+  .panel h2{font-size:13px;margin:0 0 14px;color:var(--dim);font-weight:600;
+            text-transform:uppercase;letter-spacing:1px}
+  .field{margin-bottom:16px}
+  .field label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+  .field label b{color:var(--blue);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--blue);height:4px}
+  .row{display:flex;align-items:center;gap:8px;font-size:13px}
+  input[type=checkbox]{accent-color:var(--blue);width:15px;height:15px}
+  button{width:100%;padding:11px;border:0;border-radius:8px;cursor:pointer;
+         background:linear-gradient(180deg,#3f7bf0,#2f63d8);color:#fff;
+         font-size:14px;font-weight:600;font-family:inherit;transition:.15s}
+  button:hover:not(:disabled){filter:brightness(1.12)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--dim);
+               font-weight:400;padding:8px;margin-top:9px;font-size:12.5px}
+  button.ghost:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
+  .hint{font-size:12px;color:var(--dim);line-height:1.6;margin-top:12px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px;margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+  .card .t{font-size:12px;color:var(--dim);margin-bottom:10px}
+  .kv{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;
+      font-variant-numeric:tabular-nums}
+  .kv span:first-child{color:var(--dim)}
+  .up{color:var(--green)} .down{color:var(--red)}
+  .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+            padding:14px 8px 6px;margin-bottom:14px}
+  .chartbox .cap{font-size:12px;color:var(--dim);padding:0 10px 6px}
+  svg{display:block;width:100%}
+  .legend{display:flex;gap:18px;font-size:12px;color:var(--dim);padding:0 12px 8px}
+  .legend i{display:inline-block;width:16px;height:3px;border-radius:2px;
+            vertical-align:middle;margin-right:6px}
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:500;font-size:12px}
+  th:first-child,td:first-child{text-align:left}
+  .bar{height:5px;border-radius:3px;background:var(--blue);display:inline-block;vertical-align:middle}
+  .overlay{position:fixed;inset:0;background:rgba(9,13,20,.78);display:none;
+           align-items:center;justify-content:center;flex-direction:column;gap:18px;z-index:50}
+  .overlay.on{display:flex}
+  .spin{width:38px;height:38px;border:3px solid rgba(255,255,255,.15);
+        border-top-color:var(--blue);border-radius:50%;animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .overlay p{margin:0;color:var(--dim);font-size:13px}
+  .err{background:rgba(232,86,74,.12);border:1px solid rgba(232,86,74,.4);
+       color:#ff9b93;padding:12px 14px;border-radius:8px;font-size:13px;display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>多因子选股 + 波动率择时 · 量化交易系统</h1>
+  <span class="badge" id="modeBadge">数据模式：--</span>
+  <span class="badge" id="engineBadge">回测引擎：自研（每次请求实时计算）</span>
+</header>
+
+<div class="layout">
+  <!-- 左侧：参数面板 -->
+  <div class="panel">
+    <h2>策略参数</h2>
+
+    <div class="field">
+      <label>股票池大小 <b><span id="vCodes">40</span> 只</b></label>
+      <input type="range" id="nCodes" min="10" max="100" step="10" value="40">
+    </div>
+
+    <div class="field">
+      <label>持仓只数 <b><span id="vHold">20</span> 只</b></label>
+      <input type="range" id="nHold" min="1" max="50" step="1" value="20">
+    </div>
+
+    <div class="field">
+      <label>缓冲区 <b><span id="vBuf">0.5</span></b></label>
+      <input type="range" id="buffer" min="0" max="2" step="0.1" value="0.5">
+    </div>
+
+    <div class="field">
+      <label>调仓周期 <b><span id="vReb">10</span> 天</b></label>
+      <input type="range" id="reb" min="1" max="60" step="1" value="10">
+    </div>
+
+    <div class="field">
+      <div class="row"><input type="checkbox" id="timing" checked><label style="margin:0">开启波动率择时</label></div>
+    </div>
+
+    <div class="field">
+      <label>目标年化波动 <b><span id="vVol">18</span>%</b></label>
+      <input type="range" id="tvol" min="5" max="60" step="1" value="18">
+    </div>
+
+    <button id="runBtn">开始回测</button>
+    <button class="ghost" id="resetBtn">恢复默认参数</button>
+
+    <div class="hint">
+      每次点击「开始回测」，后端都会重新载入数据、计算因子、逐笔撮合并计算指标，
+      净值曲线是这次请求现场算出来的。
+    </div>
+  </div>
+
+  <!-- 右侧：结果 -->
+  <div>
+    <div class="err" id="err"></div>
+
+    <div class="cards" id="cards">
+      <div class="card"><div class="t">等待运行</div>
+        <div class="kv"><span>点左侧「开始回测」</span><span></span></div></div>
+    </div>
+
+    <div class="chartbox">
+      <div class="cap" id="navCap">归一化净值（起点 = 1.0）</div>
+      <div class="legend">
+        <span><i style="background:#e8564a"></i>策略</span>
+        <span><i style="background:#5b8ff9"></i>基准</span>
+        <span><i style="background:#f0a742"></i>样本外起点</span>
+      </div>
+      <svg id="navChart" viewBox="0 0 1000 300" preserveAspectRatio="none" style="height:300px"></svg>
+    </div>
+
+    <div class="chartbox">
+      <div class="cap">回撤（水下曲线）</div>
+      <svg id="ddChart" viewBox="0 0 1000 130" preserveAspectRatio="none" style="height:130px"></svg>
+    </div>
+
+    <div class="panel" style="margin-bottom:14px">
+      <h2>因子有效性（样本内 RankIC）</h2>
+      <table id="icTable">
+        <thead><tr><th>因子</th><th>IC 均值</th><th>ICIR</th><th>IC&gt;0 占比</th><th style="width:120px"></th></tr></thead>
+        <tbody><tr><td colspan="5" style="color:#8a97ab">运行后显示</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2 id="detailTitle">详细指标</h2>
+      <table id="detailTable">
+        <thead><tr><th>指标</th><th>样本内·策略</th><th>样本内·基准</th><th>样本外·策略</th><th>样本外·基准</th></tr></thead>
+        <tbody><tr><td colspan="5" style="color:#8a97ab">运行后显示</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="spin"></div>
+  <p id="overlayText">正在回测…</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const pct = v => (v === null || v === undefined) ? '—' : (v * 100).toFixed(2) + '%';
+const num = (v, d = 3) => (v === null || v === undefined) ? '—' : Number(v).toFixed(d);
+const cls = v => (v === null || v === undefined) ? '' : (v >= 0 ? 'up' : 'down');
+
+// ---- 滑块联动显示 ----
+const bind = (id, out, fmt = x => x) => {
+  const el = $(id), o = $(out);
+  el.addEventListener('input', () => { o.textContent = fmt(el.value); });
+};
+bind('nCodes', 'vCodes');
+bind('nHold', 'vHold');
+bind('buffer', 'vBuf', v => Number(v).toFixed(1));
+bind('reb', 'vReb');
+bind('tvol', 'vVol');
+
+let timer = null;
+async function fetchDefaults() {
+  try {
+    const r = await fetch('/api/defaults');
+    const d = await r.json();
+    $('nHold').value = d.n_hold;    $('vHold').textContent = d.n_hold;
+    $('buffer').value = d.buffer_pct; $('vBuf').textContent = Number(d.buffer_pct).toFixed(1);
+    $('reb').value = d.rebalance_days; $('vReb').textContent = d.rebalance_days;
+    $('tvol').value = Math.round(d.target_vol * 100); $('vVol').textContent = Math.round(d.target_vol * 100);
+    $('timing').checked = d.use_timing;
+    // 真实数据下股票池上限就是配置里的代码数，避免滑块能拖到超出实际数量
+    if (d.n_codes_available) {
+      const el = $('nCodes');
+      el.max = d.n_codes_available;
+      el.step = d.n_codes_available >= 50 ? 10 : 5;
+      if (+el.value > d.n_codes_available) el.value = d.n_codes_available;
+    }
+    $('nCodes').value = d.n_codes;  $('vCodes').textContent = d.n_codes;
+    const badge = $('modeBadge');
+    const MODE_LABEL = {
+      offline: '离线模拟数据',
+      akshare: 'akshare 真实数据',
+      baostock: 'baostock 真实数据',
+    };
+    badge.textContent = '数据模式：' + (MODE_LABEL[d.data_mode] || d.data_mode);
+    // 只有模拟数据才用警告色，真实数据一律正常色
+    badge.classList.toggle('warn', d.data_mode === 'offline');
+  } catch (e) { /* 忽略 */ }
+}
+
+// ---- 主流程 ----
+$('runBtn').onclick = async () => {
+  const btn = $('runBtn');
+  const payload = {
+    n_codes: +$('nCodes').value,
+    n_hold: +$('nHold').value,
+    buffer_pct: +$('buffer').value,
+    rebalance_days: +$('reb').value,
+    use_timing: $('timing').checked,
+    target_vol: +$('tvol').value / 100,
+  };
+
+  $('err').style.display = 'none';
+  $('overlay').classList.add('on');
+  btn.disabled = true;
+
+  const t0 = Date.now();
+  timer = setInterval(() => {
+    $('overlayText').textContent = `正在回测…已用 ${((Date.now() - t0) / 1000).toFixed(1)} 秒`;
+  }, 100);
+
+  try {
+    const resp = await fetch('/api/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const t = await resp.text();
+      throw new Error('HTTP ' + resp.status + '：' + t.slice(0, 300));
+    }
+    const data = await resp.json();
+    render(data);
+  } catch (e) {
+    $('err').style.display = 'block';
+    $('err').textContent = '回测失败：' + e.message;
+  } finally {
+    clearInterval(timer);
+    $('overlay').classList.remove('on');
+    btn.disabled = false;
+  }
+};
+
+$('resetBtn').onclick = () => fetchDefaults();
+
+// ---- 渲染 ----
+function render(d) {
+  const m = d.meta;
+  const is = d.periods['样本内'] || {};
+  const oos = d.periods['样本外'] || {};
+
+  // 指标卡片
+  const card = (title, blk) => {
+    if (!blk || !blk['策略']) return `<div class="card"><div class="t">${title}</div><div class="kv"><span>数据不足</span><span></span></div></div>`;
+    const s = blk['策略'], b = blk['基准'], e = blk['超额'] || {};
+    return `<div class="card">
+      <div class="t">${title}</div>
+      <div class="kv"><span>年化收益 · 策略</span><span class="${cls(s['年化收益率'])}">${pct(s['年化收益率'])}</span></div>
+      <div class="kv"><span>年化收益 · 基准</span><span class="${cls(b['年化收益率'])}">${pct(b['年化收益率'])}</span></div>
+      <div class="kv"><span>年化超额</span><span class="${cls(e['年化超额'])}">${pct(e['年化超额'])}</span></div>
+      <div class="kv"><span>最大回撤 · 策略</span><span class="down">${pct(s['最大回撤'])}</span></div>
+      <div class="kv"><span>夏普 · 策略 / 基准</span><span>${num(s['夏普比率'], 2)} / ${num(b['夏普比率'], 2)}</span></div>
+    </div>`;
+  };
+
+  $('cards').innerHTML =
+    card('样本内 ' + (m.is_range || ''), is) +
+    card('样本外 ' + (m.oos_range || ''), oos) +
+    `<div class="card"><div class="t">运行信息</div>
+      <div class="kv"><span>股票池 / 持仓</span><span>${m.n_codes} / ${m.n_hold}</span></div>
+      <div class="kv"><span>成交笔数</span><span>${m.n_trades}</span></div>
+      <div class="kv"><span>年均单边换手</span><span>${num(m.turnover, 1)} 倍</span></div>
+      <div class="kv"><span>计算耗时</span><span>${m.elapsed}s${m.cached ? '（缓存）' : '（实时计算）'}</span></div>
+      <div class="kv"><span>择时</span><span>${m.use_timing ? '开启 @ ' + Math.round(m.target_vol * 100) + '%' : '关闭'}</span></div>
+    </div>`;
+
+  drawNav(d.nav);
+  drawDD(d.nav);
+  renderIC(d.ic);
+  renderDetail(is, oos);
+}
+
+function drawNav(nav) {
+  const svg = $('navChart'), W = 1000, H = 300;
+  const padL = 52, padR = 14, padT = 12, padB = 26;
+  const dates = nav.dates, s = nav.strategy, b = nav.benchmark;
+  if (!dates || !dates.length) { svg.innerHTML = ''; return; }
+
+  const all = [...s, ...b].filter(v => v !== null && isFinite(v));
+  let lo = Math.min(...all), hi = Math.max(...all);
+  const pad = (hi - lo) * 0.08 || 0.05;
+  lo -= pad; hi += pad;
+
+  const X = i => padL + (W - padL - padR) * (i / Math.max(dates.length - 1, 1));
+  const Y = v => padT + (H - padT - padB) * (1 - (v - lo) / (hi - lo));
+
+  const path = arr => {
+    let d = '', started = false;
+    for (let i = 0; i < arr.length; i++) {
+      const v = arr[i];
+      if (v === null || !isFinite(v)) { started = false; continue; }
+      d += (started ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1) + ' ';
+      started = true;
+    }
+    return d;
+  };
+
+  let g = '';
+  // 网格 + Y 轴
+  for (let k = 0; k <= 4; k++) {
+    const v = lo + (hi - lo) * k / 4, y = Y(v);
+    g += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#2a3446" stroke-width="1"/>`;
+    g += `<text x="${padL - 8}" y="${(y + 4).toFixed(1)}" fill="#8a97ab" font-size="11" text-anchor="end">${v.toFixed(2)}</text>`;
+  }
+  // 1.0 基准线
+  if (lo < 1 && hi > 1) {
+    const y = Y(1);
+    g += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#5c6a80" stroke-dasharray="4 4" stroke-width="1"/>`;
+  }
+  // X 轴年份
+  let lastYear = '';
+  dates.forEach((dt, i) => {
+    const y = dt.slice(0, 4);
+    if (y !== lastYear) {
+      lastYear = y;
+      g += `<text x="${X(i).toFixed(1)}" y="${H - 8}" fill="#8a97ab" font-size="11" text-anchor="middle">${y}</text>`;
+    }
+  });
+  // 样本外分界
+  // 样本外分界：分界日期那天可能根本不是交易日（如 2023-01-01 元旦休市），
+  // 所以不能用 indexOf 精确匹配，要找"第一个 >= 分界日"的交易日
+  let si = -1;
+  for (let i = 0; i < dates.length; i++) {
+    if (dates[i] >= nav.split_date) { si = i; break; }
+  }
+  if (si > 0) {
+    const x = X(si);
+    g += `<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${H - padB}" stroke="#f0a742" stroke-dasharray="5 4" stroke-width="1.3"/>`;
+    g += `<text x="${(x + 6).toFixed(1)}" y="${padT + 13}" fill="#f0a742" font-size="11">样本外</text>`;
+  }
+  // 曲线
+  g += `<path d="${path(b)}" fill="none" stroke="#5b8ff9" stroke-width="1.3"/>`;
+  g += `<path d="${path(s)}" fill="none" stroke="#e8564a" stroke-width="1.9"/>`;
+
+  svg.innerHTML = g;
+
+  const finalS = s[s.length - 1], finalB = b[b.length - 1];
+  $('navCap').textContent =
+    `归一化净值（起点 = 1.0）　期末：策略 ${finalS != null ? finalS.toFixed(3) : '—'} / 基准 ${finalB != null ? finalB.toFixed(3) : '—'}`;
+}
+
+function drawDD(nav) {
+  const svg = $('ddChart'), W = 1000, H = 130;
+  const padL = 52, padR = 14, padT = 10, padB = 20;
+  const dates = nav.dates;
+  if (!dates || !dates.length) { svg.innerHTML = ''; return; }
+
+  const dd = arr => {
+    let peak = -Infinity, out = [];
+    for (const v of arr) {
+      if (v === null || !isFinite(v)) { out.push(null); continue; }
+      peak = Math.max(peak, v);
+      out.push(v / peak - 1);
+    }
+    return out;
+  };
+  const ds = dd(nav.strategy), db = dd(nav.benchmark);
+  const allDD = [...ds, ...db].filter(v => v !== null && isFinite(v));
+  const lo = Math.min(...(allDD.length ? allDD : [-0.01]), -0.01);
+
+  const X = i => padL + (W - padL - padR) * (i / Math.max(dates.length - 1, 1));
+  const Y = v => padT + (H - padT - padB) * (v / lo);
+
+  const area = arr => {
+    let d = `M${X(0).toFixed(1)} ${Y(0).toFixed(1)} `, started = false;
+    for (let i = 0; i < arr.length; i++) {
+      const v = arr[i];
+      if (v === null) continue;
+      d += `L${X(i).toFixed(1)} ${Y(v).toFixed(1)} `;
+      started = true;
+    }
+    return started ? d + `L${X(arr.length - 1).toFixed(1)} ${Y(0).toFixed(1)} Z` : '';
+  };
+
+  let g = '';
+  for (let k = 0; k <= 2; k++) {
+    const v = lo * k / 2, y = Y(v);
+    g += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#2a3446" stroke-width="1"/>`;
+    g += `<text x="${padL - 8}" y="${(y + 4).toFixed(1)}" fill="#8a97ab" font-size="11" text-anchor="end">${(v * 100).toFixed(0)}%</text>`;
+  }
+  g += `<path d="${area(db)}" fill="rgba(91,143,249,.22)" stroke="#5b8ff9" stroke-width="1.2"/>`;
+  g += `<path d="${area(ds)}" fill="rgba(232,86,74,.22)" stroke="#e8564a" stroke-width="1.5"/>`;
+  svg.innerHTML = g;
+}
+
+function renderIC(rows) {
+  if (!rows || !rows.length) return;
+  const maxAbs = Math.max(...rows.map(r => Math.abs(r['IC均值'] || 0)), 0.001);
+  const body = rows.map(r => {
+    const ic = r['IC均值'] || 0;
+    const w = Math.round(Math.abs(ic) / maxAbs * 100);
+    const color = ic >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<tr>
+      <td>${r['因子']}</td>
+      <td class="${cls(ic)}">${num(ic, 4)}</td>
+      <td>${num(r['ICIR'], 2)}</td>
+      <td>${pct(r['IC>0占比'])}</td>
+      <td><span class="bar" style="width:${w}%;background:${color}"></span></td>
+    </tr>`;
+  }).join('');
+  $('icTable').querySelector('tbody').innerHTML = body;
+}
+
+function renderDetail(is, oos) {
+  const rows = [
+    ['累计收益率', '累计收益率'], ['年化收益率', '年化收益率'],
+    ['最大回撤', '最大回撤'], ['夏普比率', '夏普比率'],
+    ['年化波动率', '年化波动率'], ['卡玛比率', '卡玛比率'],
+  ];
+  const cell = (blk, who, k) => {
+    if (!blk || !blk[who]) return '—';
+    const v = blk[who][k];
+    if (v === null || v === undefined) return '—';
+    return (k === '夏普比率' || k === '卡玛比率') ? num(v, 3) : pct(v);
+  };
+  let html = rows.map(([label, k]) => `<tr>
+      <td>${label}</td>
+      <td>${cell(is, '策略', k)}</td><td>${cell(is, '基准', k)}</td>
+      <td>${cell(oos, '策略', k)}</td><td>${cell(oos, '基准', k)}</td>
+    </tr>`).join('');
+
+  const ex = (blk, k) => (blk && blk['超额'] && blk['超额'][k] != null)
+    ? (k === '信息比率' ? num(blk['超额'][k], 2) : pct(blk['超额'][k])) : '—';
+  html += `<tr><td colspan="5" style="color:#8a97ab;padding-top:14px">超额收益</td></tr>`;
+  html += `<tr><td>年化超额 / 信息比率</td>
+    <td colspan="2">${ex(is, '年化超额')} / ${ex(is, '信息比率')}</td>
+    <td colspan="2">${ex(oos, '年化超额')} / ${ex(oos, '信息比率')}</td></tr>`;
+  $('detailTable').querySelector('tbody').innerHTML = html;
+}
+
+// 页面加载时自动跑一次，省得看到空页面
+window.addEventListener('load', () => {
+  fetchDefaults().then(() => $('runBtn').click());
+});
+</script>
+</body>
+</html>
