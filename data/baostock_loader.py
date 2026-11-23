@@ -208,10 +208,10 @@ def _fetch_index(bs, code, start, end, cache: Path) -> pd.Series:
     rows = []
     while (rs.error_code == "0") and rs.next():
         rows.append(rs.get_row_data())
-    df = _rows_to_frame(rows, rs.fields)
-    if df is None or df.empty or "close" not in df.columns:
+    idx_df = _rows_to_frame(rows, rs.fields)
+    if idx_df is None or idx_df.empty or "close" not in idx_df.columns:
         raise RuntimeError(f"指数 {code} 返回空数据，检查 benchmark_code")
 
-    print(f"      基准指数 {bs_code}，{len(df)} 行")
-    df.to_parquet(path)
-    return df.loc[start:end, "close"].rename("benchmark")
+    print(f"      基准指数 {bs_code}，{len(idx_df)} 行")
+    idx_df.to_parquet(path)
+    return idx_df.loc[start:end, "close"].rename("benchmark")

@@ -22,6 +22,8 @@ import sys
 import time
 from pathlib import Path
 
+import pandas as pd
+
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -94,6 +96,15 @@ def _period_block(nav_s, nav_b, start, end) -> dict:
 def _compute(p: RunParams) -> dict:
     """真正干活的地方：载数据 → 算因子 → 生成信号 → 跑回测 → 算指标。"""
     t0 = time.time()
+    _last = [t0]
+
+    def _mark(name):
+        """记录各阶段耗时，供前端调试面板显示。"""
+        now = time.time()
+        stage_t[name] = round(now - _last[0], 2)
+        _last[0] = now
+
+    stage_t: dict[str, float] = {}
 
     cfg = copy.deepcopy(CONFIG)
     cfg["strategy"]["n_hold"] = p.n_hold
@@ -105,10 +116,12 @@ def _compute(p: RunParams) -> dict:
     panel, bench = load_panel(cfg)
     codes = list(panel["close"].columns)[: p.n_codes]
     panel = {k: v[codes] for k, v in panel.items()}
+    _mark("载入数据")
 
     mask = build_mask(panel, cfg)
     mask = apply_st_filter(mask, cfg, is_st=panel.get("isST"))
     score, detail = composite_score(panel, cfg["factors"], mask)
+    _mark("计算因子")
 
     w = MultiFactorTopN(p.n_hold, p.buffer_pct, p.rebalance_days).generate_weights(
         panel, score, mask
@@ -116,6 +129,7 @@ def _compute(p: RunParams) -> dict:
     if p.use_timing:
         w = VolTargetTiming(p.target_vol, cfg["timing"]["window"],
                             cfg["timing"]["max_lev"]).apply(w, panel)
+    _mark("生成信号")
 
     res = run_backtest(
         w, panel, mask,
@@ -125,6 +139,7 @@ def _compute(p: RunParams) -> dict:
     )
     nav = res["nav"]
     nav_b = bench.reindex(nav.index).ffill()
+    _mark("回测撮合")
 
     split = cfg["split"]
     periods = {
@@ -170,6 +185,44 @@ def _compute(p: RunParams) -> dict:
         total_fee = float(trades["fee"].sum())
     else:
         turnover, total_fee = 0.0, 0.0
+    _mark("计算指标")
+
+    # ---------------- 调试面板数据 ----------------
+    last = nav.index[-1]
+
+    # 1) 最后交易日的目标持仓
+    holdings = []
+    w_last = w.loc[last] if last in w.index else None
+    if w_last is not None:
+        for code, val in w_last.items():
+            if val is not None and float(val) > 1e-6:
+                holdings.append({"代码": code, "权重": round(float(val), 4)})
+        holdings.sort(key=lambda x: -x["权重"])
+
+    # 2) 最近成交（最多 60 笔）
+    trade_rows = []
+    if len(trades):
+        for _, r in trades.tail(60).iterrows():
+            trade_rows.append({
+                "日期": pd.Timestamp(r["date"]).strftime("%Y-%m-%d"),
+                "代码": str(r["code"]),
+                "方向": "买入" if r["side"] == "BUY" else "卖出",
+                "股数": int(r["shares"]),
+                "价格": _num(r["price"]),
+                "金额": _num(r["amount"]),
+                "费用": _num(r["fee"]),
+            })
+
+    # 3) 最后交易日综合打分前 10 名，附各因子 z 值
+    snap = []
+    if last in score.index:
+        top = score.loc[last].dropna().sort_values(ascending=False).head(10)
+        for code, sc in top.items():
+            row = {"代码": code, "综合分": _num(sc)}
+            for name, f in detail.items():
+                v = f.loc[last, code] if (last in f.index and code in f.columns) else None
+                row[name] = _num(v)
+            snap.append(row)
 
     return {
         "meta": {
@@ -189,8 +242,13 @@ def _compute(p: RunParams) -> dict:
             # 卡片标题用这两个字段，避免前端硬编码年份（改配置后标题会跟着变）
             "is_range": f"{split['is_start'][:4]}–{split['is_end'][:4]}",
             "oos_range": f"{split['oos_start'][:4]}–{split['oos_end'][:4]}",
+            # 各阶段耗时，供前端调试面板显示
+            "timings": stage_t,
         },
         "periods": periods,
+        "holdings": holdings,
+        "trades": trade_rows,
+        "factors": snap,
         "nav": nav_json,
         "ic": ic_rows,
     }
