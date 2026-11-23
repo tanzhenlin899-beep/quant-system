@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -61,6 +61,8 @@ class RunParams(BaseModel):
     use_timing: bool = True
     target_vol: float = Field(0.18, ge=0.05, le=0.60)
     n_codes: int = Field(40, ge=10, le=100)
+    # 数据源；留空则使用 config.py 中的设置
+    mode: str | None = Field(None, description="offline / akshare / baostock")
 
 
 # ---------------------------------------------------------------- 工具
@@ -107,6 +109,10 @@ def _compute(p: RunParams) -> dict:
     stage_t: dict[str, float] = {}
 
     cfg = copy.deepcopy(CONFIG)
+    if p.mode:
+        if p.mode not in ("offline", "akshare", "baostock"):
+            raise ValueError(f"不支持的数据源：{p.mode}")
+        cfg["data"]["mode"] = p.mode
     cfg["strategy"]["n_hold"] = p.n_hold
     cfg["strategy"]["buffer_pct"] = p.buffer_pct
     cfg["strategy"]["rebalance_days"] = p.rebalance_days
@@ -260,9 +266,29 @@ def index():
     return FileResponse(str(STATIC / "index.html"))
 
 
+def _cache_count(mode: str) -> int:
+    """统计某个数据源本地已缓存多少只股票。"""
+    base = Path(CONFIG["data"]["cache_dir"])
+    if mode == "offline":
+        return 100                       # 内置模拟数据固定 100 只
+    d = base / "bs" if mode == "baostock" else base
+    if not d.exists():
+        return 0
+    return len(list(d.glob("*_hfq.parquet")))
+
+
 @app.get("/api/defaults")
 def defaults():
     codes = CONFIG["data"]["codes"]
+    mode = CONFIG["data"]["mode"]
+    total = 100 if mode == "offline" else len(codes)
+    modes = []
+    for value, label in (("baostock", "baostock（真实 A 股，不限流）"),
+                         ("offline", "离线模拟数据（不联网）"),
+                         ("akshare", "akshare（真实 A 股，按 IP 限流）")):
+        n = _cache_count(value)
+        need = 100 if value == "offline" else len(codes)
+        modes.append({"value": value, "label": label, "cached": n, "need": need})
     return {
         "n_hold": CONFIG["strategy"]["n_hold"],
         "buffer_pct": CONFIG["strategy"]["buffer_pct"],
@@ -270,21 +296,31 @@ def defaults():
         "use_timing": CONFIG["timing"]["enabled"],
         "target_vol": CONFIG["timing"]["target_vol"],
         # 真实数据下股票池就是配置里的代码数，别让滑块显示 40 而实际只有 30
-        "n_codes": min(40, len(codes)) if CONFIG["data"]["mode"] != "offline" else 40,
-        "n_codes_available": 100 if CONFIG["data"]["mode"] == "offline" else len(codes),
+        "n_codes": min(40, total),
+        "n_codes_available": total,
         "factors": list(CONFIG["factors"].keys()),
-        "data_mode": CONFIG["data"]["mode"],
+        "data_mode": mode,
+        "modes": modes,
     }
 
 
 @app.post("/api/run")
 def run(p: RunParams):
-    key = (p.n_hold, p.buffer_pct, p.rebalance_days, p.use_timing, p.target_vol, p.n_codes)
+    # 缓存键必须带上数据源，否则切换数据源会拿到其它数据源的结果
+    key = (p.mode, p.n_hold, p.buffer_pct, p.rebalance_days,
+           p.use_timing, p.target_vol, p.n_codes)
     if key in _CACHE:
         out = copy.deepcopy(_CACHE[key])
         out["meta"]["cached"] = True
         return out
-    out = _compute(p)
+    try:
+        out = _compute(p)
+    except Exception as e:  # noqa: BLE001
+        # 常见于 akshare 被限流、或首次下载耗时过长，返回可读的错误信息
+        raise HTTPException(
+            status_code=503,
+            detail=f"{type(e).__name__}: {e}",
+        ) from e
     out["meta"]["cached"] = False
     _CACHE[key] = copy.deepcopy(out)
     return out
